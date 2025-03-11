@@ -2,24 +2,24 @@ version: 2.1
 
 workflows:
   version: 2
-  build_and_deploy:
+  build:
     jobs:
       - build:
           filters:
             branches:
               only:
-                - master
+                - main
       - deploy:
           filters:
             branches:
               only:
-                - master
+                - main
           requires:
             - build
 
 jobs:
   build:
-    working_directory: ~/simple-application
+    working_directory: ~/devops-circleci
     docker:
       - image: circleci/node:10.16.3
     steps:
@@ -38,16 +38,9 @@ jobs:
             - ./node_modules
 
   deploy:
-    docker:
-      - image: circleci/node:10.16.3
+    docker: 
+      - image:  circleci/node:10.16.3
     steps:
       - run:
           name: deploy-application
-          command: |
-            ssh -o StrictHostKeyChecking=no $EC2_USERNAME@$EC2_PUBLIC_DNS "
-              # get the latest code from github
-              cd /home/ubuntu/simple-application || mkdir -p /home/ubuntu/simple-application &&
-              git pull origin master &&
-              npm install &&
-              pm2 restart app || pm2 start app.js
-            "
+          command: ssh -o StrictHostKeyChecking=no $EC2_USERNAME@$EC2_PUBLIC_DNS "rm -rf simple-application/; git clone https://github.com/ailsapm/devops-circleci.git; source simple-application/deploy.sh"
