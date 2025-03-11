@@ -1,49 +1,53 @@
 version: 2.1
 
-executors:
- 
-  node-executor:
-    docker:
-      - image: circleci/python:3.8  
-    working_directory: ~/repo
-
-jobs:
-  build:
-    executor: node-executor
-    steps:
-      - checkout  # pu;l code from the repo
-      - run:
-          name: Set up Node.js and dependencies
-          command: |
-            sudo apt-get update && sudo apt-get install -y nodejs npm
-            sudo npm install -g pm2
-            npm install  # Install app dependencies
-      - run:
-          name: Run tests
-          command: |
-            npm test  # Add your test command here
-
-  deploy:
-    executor: node-executor
-    steps:
-      - checkout  # get code from the repo again if needed
-      - run:
-          name: Install dependencies for deployment
-          command: |
-            sudo apt-get update && sudo apt-get install -y nodejs npm
-            sudo npm install -g pm2
-      - run:
-          name: Make deploy.sh executable
-          command: chmod +x deploy.sh
-      - run:
-          name: Execute deploy.sh
-          command: ./deploy.sh  # run deploy script
-
 workflows:
   version: 2
   build_and_deploy:
     jobs:
-      - build
+      - build:
+          filters:
+            branches:
+              only:
+                - main
       - deploy:
+          filters:
+            branches:
+              only:
+                - main
           requires:
-            - build  # make sure deploy runs only after build is successful
+            - build
+
+jobs:
+  build:
+    working_directory: ~/simple-application
+    docker:
+      - image: circleci/node:10.16.3
+    steps:
+      - checkout
+      - run:
+          name: update-npm
+          command: 'sudo npm install -g npm@5'
+      - restore_cache:
+          key: dependency-cache-{{ checksum "package-lock.json" }}
+      - run:
+          name: install-npm
+          command: npm install
+      - save_cache:
+          key: dependency-cache-{{ checksum "package-lock.json" }}
+          paths:
+            - ./node_modules
+
+  deploy:
+    docker:
+      - image: circleci/node:10.16.3
+    steps:
+      - run:
+          name: deploy-application
+          command: |
+            ssh -o StrictHostKeyChecking=no $EC2_USERNAME@$EC2_PUBLIC_DNS "
+              # Clean and pull the latest code from GitHub
+              cd /home/ubuntu/simple-application || mkdir -p /home/ubuntu/simple-application &&
+              git pull origin main &&
+              npm install &&
+              pm2 restart app || pm2 start app.js
+            "
